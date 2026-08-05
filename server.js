@@ -98,8 +98,14 @@ function verifyToken(token) {
 
 function setCookie(res, req, token) {
   const secure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  // SameSite=Lax (não Strict): o fluxo de SSO chega via navegação de nível
+  // superior iniciada num site externo (o DMP abrindo a aba) — com Strict,
+  // alguns navegadores não enviam o cookie recém-setado na requisição
+  // seguinte dentro da mesma cadeia de redirecionamento (/sso → /dashboard),
+  // mesmo já estando "no mesmo site" a partir dali. Lax ainda bloqueia o
+  // cookie em POST/subrecurso cross-site, só libera em navegação GET de topo.
   res.setHeader('Set-Cookie',
-    `siquara_auth=${token}; HttpOnly; Path=/; SameSite=Strict; Max-Age=28800${secure ? '; Secure' : ''}`);
+    `siquara_auth=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=28800${secure ? '; Secure' : ''}`);
 }
 
 function requireAuth(req, res, next) {
