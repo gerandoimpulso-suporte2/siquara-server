@@ -1,0 +1,20 @@
+{
+  "name": "siquara-server",
+  "version": "1.0.0",
+  "description": "Servidor de análise de campanhas Meta para Siquara Mattos",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.37.0",
+    "axios": "^1.7.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.19.0",
+    "node-cron": "^4.6.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
