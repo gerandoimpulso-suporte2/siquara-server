@@ -51,6 +51,7 @@ const USERS = {
   'siquara': 'siquara@2025',
   'gerando': 'impulso@2025',
   'admin':   'admin123',
+  'flavia':  'flavia@2025',
 };
 
 function parseCookies(req) {
