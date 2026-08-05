@@ -304,21 +304,23 @@ const LOGIN_PAGE = (err = '', expired = false) => `<!DOCTYPE html>
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>Siquara Analytics — Login</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@700;800&display=swap');
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:system-ui,sans-serif;background:#0f172a;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-    .card{background:#1e293b;border-radius:20px;padding:48px 40px;width:100%;max-width:400px;border:1px solid #334155;box-shadow:0 25px 50px rgba(0,0,0,.5)}
+    body{font-family:'Inter',system-ui,sans-serif;background:#F8F9FC;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+    .card{background:#FFFFFF;border-radius:18px;padding:48px 40px;width:100%;max-width:400px;border:1px solid #E4E7F0;box-shadow:0 8px 32px rgb(0 0 0 / 0.08)}
     .logo{text-align:center;margin-bottom:32px}
-    .logo-icon{width:64px;height:64px;border-radius:16px;background:#0f1f3d;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:1.4rem;font-weight:700;color:#60a5fa;letter-spacing:.02em}
-    .logo h1{color:#60a5fa;font-size:1.5rem;font-weight:700}
-    .logo p{color:#64748b;font-size:.85rem;margin-top:4px}
-    label{display:block;font-size:.8rem;font-weight:600;color:#94a3b8;margin-bottom:6px;margin-top:20px;text-transform:uppercase;letter-spacing:.05em}
-    input{width:100%;padding:12px 16px;background:#0f172a;border:1.5px solid #334155;border-radius:10px;color:#e2e8f0;font-size:.95rem;transition:border-color .2s}
-    input:focus{outline:none;border-color:#60a5fa}
-    .btn{display:block;width:100%;margin-top:28px;padding:14px;background:linear-gradient(135deg,#1d4ed8,#0f1f3d);color:#fff;border:none;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;transition:opacity .2s;letter-spacing:.03em}
-    .btn:hover{opacity:.9}
-    .err{background:#450a0a;border:1px solid #7f1d1d;border-radius:8px;padding:10px 14px;color:#fca5a5;font-size:.82rem;margin-top:16px;text-align:center}
-    .expired{background:#451a03;border:1px solid #78350f;border-radius:8px;padding:10px 14px;color:#fcd34d;font-size:.82rem;margin-top:16px;text-align:center}
-    .footer{text-align:center;margin-top:24px;color:#475569;font-size:.75rem}
+    .logo-icon{width:56px;height:56px;border-radius:14px;background:#4F6AF0;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-family:'Plus Jakarta Sans',sans-serif;font-size:1.2rem;font-weight:700;color:#fff;letter-spacing:.02em}
+    .logo h1{font-family:'Plus Jakarta Sans',sans-serif;color:#111827;font-size:1.4rem;font-weight:700}
+    .logo p{color:#6B7280;font-size:.85rem;margin-top:4px}
+    label{display:block;font-size:.75rem;font-weight:600;color:#374151;margin-bottom:6px;margin-top:20px;text-transform:uppercase;letter-spacing:.05em}
+    input{width:100%;padding:12px 16px;background:#FFFFFF;border:1.5px solid #D0D5E8;border-radius:10px;color:#111827;font-size:.95rem;transition:border-color .2s,box-shadow .2s}
+    input:focus{outline:none;border-color:#4F6AF0;box-shadow:0 0 0 3px #e0eaff}
+    .btn{display:block;width:100%;margin-top:28px;padding:14px;background:#4F6AF0;color:#fff;border:none;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;transition:background .2s;letter-spacing:.03em}
+    .btn:hover{background:#3d54d4}
+    .err{background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:10px 14px;color:#DC2626;font-size:.82rem;margin-top:16px;text-align:center}
+    .expired{background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:10px 14px;color:#C2410C;font-size:.82rem;margin-top:16px;text-align:center}
+    .footer{text-align:center;margin-top:24px;color:#9CA3AF;font-size:.75rem}
+    @media (max-width:480px){ input{font-size:16px} }
   </style>
 </head>
 <body>
