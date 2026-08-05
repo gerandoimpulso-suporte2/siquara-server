@@ -34,6 +34,7 @@ npm run dev
 ## Endpoints da API
 
 - GET  /health          — status do servidor
+- GET  /sso             — login via token assinado externamente (SSO do DMP Sistema, ver abaixo)
 - GET  /api/dados       — dados completos (campanhas, anuncios, organico, analise)
 - GET  /api/resumo      — apenas o resumo de KPIs
 - GET  /api/campaigns   — campanhas Meta ADS
@@ -53,17 +54,32 @@ META_AD_ACCOUNT_ID=
 ANTHROPIC_API_KEY=
 INSTAGRAM_ACCOUNT_ID=
 DAYS_BACK=7
-API_SECRET=siquara2025
+API_SECRET=<gerar-um-valor-forte-aleatorio>
+SIQUARA_USERS={"usuario":"senha-forte",...}
 PORT=3000
 ```
 
+`API_SECRET` NUNCA deve ser deixado no valor de exemplo do `.env.example` —
+ele assina tanto o cookie de sessão quanto o Bearer token de `/api/token`,
+`/api/executar` e `/api/setup`. Gerar com `openssl rand -hex 32` (ou
+equivalente) e configurar só via variável de ambiente no Railway, nunca no
+código.
+
 ## Login do dashboard
 
-```
-siquara / siquara@2025   → acesso Siquara Mattos
-gerando / impulso@2025   → admin agencia
-admin   / admin123       → admin agencia
-```
+Login manual (usuário/senha) é lido de `SIQUARA_USERS` (JSON) — sem essa
+variável configurada, o servidor cai num fallback de dev local só (não usar
+em produção). Veja o valor real configurado no Railway (`railway variables`),
+não neste arquivo.
+
+## SSO com o DMP Sistema
+
+`GET /sso?token=<token>` aceita um token assinado com o mesmo `API_SECRET`
+(mesmo esquema HMAC de `signToken`/`verifyToken` em `server.js`) e loga o
+usuário sem passar pelo formulário. O DMP Sistema (`dmp-sistema-back`) gera
+esse token para usuários com o módulo "Meta Ads (Siquara)" liberado. Os dois
+lados precisam ter **o mesmo valor** de `API_SECRET`/`SIQUARA_API_SECRET` —
+se divergirem, o SSO falha silenciosamente (token não valida).
 
 ## Estrutura
 

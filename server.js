@@ -47,12 +47,21 @@ function dadosPathFor(daysBack) {
 }
 
 // ── Autenticação ──────────────────────────────────────────────────────────────
-const USERS = {
-  'siquara': 'siquara@2025',
-  'gerando': 'impulso@2025',
-  'admin':   'admin123',
-  'flavia':  'flavia@2025',
-};
+// Login manual: lido de SIQUARA_USERS (JSON {"user":"senha",...}) em produção.
+// Fallback hardcoded só existe pra rodar local sem configurar nada.
+function loadUsers() {
+  const raw = process.env.SIQUARA_USERS;
+  if (!raw) {
+    return { siquara: 'siquara@2025', gerando: 'impulso@2025', admin: 'admin123', flavia: 'flavia@2025' };
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    console.error('[AUTH] SIQUARA_USERS inválido (JSON malformado) — nenhum login manual disponível');
+    return {};
+  }
+}
+const USERS = loadUsers();
 
 function parseCookies(req) {
   const list = {};
@@ -360,6 +369,17 @@ app.post('/login', (req, res) => {
     return res.redirect('/?error=1');
   }
   const token = signToken(username.trim());
+  setCookie(res, req, token);
+  res.redirect('/dashboard');
+});
+
+// SSO: aceita um token já assinado (pelo DMP Sistema, com o mesmo API_SECRET)
+// e loga o usuário sem passar pelo formulário — reaproveita verifyToken/setCookie
+// tal como estão, não altera o fluxo de login manual.
+app.get('/sso', (req, res) => {
+  const token = req.query.token;
+  const user = verifyToken(token);
+  if (!user) return res.redirect('/?error=1');
   setCookie(res, req, token);
   res.redirect('/dashboard');
 });
