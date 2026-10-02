@@ -119,6 +119,25 @@ function requireAuth(req, res, next) {
   next();
 }
 
+// Fecha a leitura pública dos dados do cliente (achado de segurança 02/10:
+// GET /api/dados respondia 200 sem login, com campanhas e insights reais).
+// Toda rota GET que devolve dado da conta passa a exigir OU a sessão já
+// logada no dashboard (mesmo cookie siquara_auth do requireAuth — cobre
+// tanto login manual quanto o /sso do DMP Sistema, que só assina o mesmo
+// cookie) OU o Bearer com API_SECRET (uso máquina-a-máquina). Não devolve
+// mais 200 sem nenhuma das duas. Diferente de requireAuth (que redireciona
+// pra /login, pensado pra navegação de página), aqui é API JSON: responde
+// 401 em JSON, sem redirect.
+function requireAuthOrBearer(req, res, next) {
+  const bearerOk = (req.headers.authorization || '') === `Bearer ${getApiSecret()}`;
+  if (bearerOk) return next();
+  const cookies = parseCookies(req);
+  const user = verifyToken(cookies.siquara_auth);
+  if (!user) return res.status(401).json({ error: 'Não autorizado. Faça login novamente.' });
+  req.user = user;
+  next();
+}
+
 // Header customizado que só o JS do próprio dashboard.html envia. Protege
 // contra CSRF em /api/executar quando a sessão (cookie) passa a autorizar
 // a chamada, sem depender mais da chave fixa que o client mandava antes:
@@ -445,7 +464,7 @@ app.get('/dashboard', requireAuth, (req, res) => {
 
 // ── API — status ──────────────────────────────────────────────────────────────
 
-app.get('/api/status', async (req, res) => {
+app.get('/api/status', requireAuthOrBearer, async (req, res) => {
   const token = getToken();
   const accountId = getAccountId();
   let tokenValid = false, account = null;
@@ -463,7 +482,7 @@ app.get('/api/status', async (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString(), token_valid: tokenValid, account_id: accountId, account, saved_campaigns: savedCampaigns, days_back: getDaysBack() });
 });
 
-app.get('/api/token-status', async (req, res) => {
+app.get('/api/token-status', requireAuthOrBearer, async (req, res) => {
   const token = getToken(), accountId = getAccountId();
   if (!token || !accountId) return res.json({ valid: false, error: 'Variáveis não configuradas' });
   res.json(await validateToken(token, accountId));
@@ -488,7 +507,7 @@ app.post('/api/token', (req, res) => {
 
 // ── API — dados ───────────────────────────────────────────────────────────────
 
-app.get('/api/dados', (req, res) => {
+app.get('/api/dados', requireAuthOrBearer, (req, res) => {
   const periodoReq = req.query.periodo ? parseInt(req.query.periodo, 10) : null;
   const dadosPath = periodoReq ? dadosPathFor(periodoReq) : DADOS_PATH;
   if (!fs.existsSync(dadosPath))
@@ -508,7 +527,7 @@ app.get('/api/dados', (req, res) => {
   }
 });
 
-app.get('/api/resumo', (req, res) => {
+app.get('/api/resumo', requireAuthOrBearer, (req, res) => {
   const periodoReq = req.query.periodo ? parseInt(req.query.periodo, 10) : null;
   const dadosPath = periodoReq ? dadosPathFor(periodoReq) : DADOS_PATH;
   if (!fs.existsSync(dadosPath))
@@ -548,7 +567,7 @@ app.get('/api/resumo', (req, res) => {
 
 // ── API — Meta buscas ─────────────────────────────────────────────────────────
 
-app.get('/api/campaigns', async (req, res) => {
+app.get('/api/campaigns', requireAuthOrBearer, async (req, res) => {
   const token = getToken(), accountId = getAccountId();
   if (!token || !accountId) return res.status(400).json({ error: 'Token/conta não configurados' });
   const r = await fetchCampaigns(token, accountId);
@@ -556,7 +575,7 @@ app.get('/api/campaigns', async (req, res) => {
   res.json({ success: true, count: r.data.length, campaigns: r.data });
 });
 
-app.get('/api/insights', async (req, res) => {
+app.get('/api/insights', requireAuthOrBearer, async (req, res) => {
   const token = getToken(), accountId = getAccountId();
   if (!token || !accountId) return res.status(400).json({ error: 'Token/conta não configurados' });
   const r = await fetchInsights(token, accountId, getDaysBack());
@@ -614,14 +633,14 @@ async function fetchAdCreatives(token, accountId, daysBack) {
   return { success: true, criativos, total_ads: ads.length };
 }
 
-app.get('/api/criativos', async (req, res) => {
+app.get('/api/criativos', requireAuthOrBearer, async (req, res) => {
   const token = getToken(), accountId = getAccountId();
   const daysBack = req.query.periodo ? parseInt(req.query.periodo, 10) : getDaysBack();
   if (!token || !accountId) return res.status(400).json({ error: 'Token/conta não configurados' });
   res.json(await fetchAdCreatives(token, accountId, daysBack));
 });
 
-app.get('/api/organico', async (req, res) => {
+app.get('/api/organico', requireAuthOrBearer, async (req, res) => {
   const token   = getToken();
   const igId    = getIgId();
   const daysBack = req.query.periodo ? parseInt(req.query.periodo, 10) : getDaysBack();
@@ -636,7 +655,7 @@ app.get('/api/organico', async (req, res) => {
 });
 
 // ── Debug Instagram ───────────────────────────────────────────────────────────
-app.get('/api/debug-instagram', async (req, res) => {
+app.get('/api/debug-instagram', requireAuthOrBearer, async (req, res) => {
   const token = getToken();
   const igId  = getIgId();
   const out   = {
@@ -736,7 +755,7 @@ app.get('/api/debug-instagram', async (req, res) => {
   res.json(out);
 });
 
-app.get('/api/fetch-all', async (req, res) => {
+app.get('/api/fetch-all', requireAuthOrBearer, async (req, res) => {
   const token = getToken(), accountId = getAccountId(), daysBack = getDaysBack();
   if (!token || !accountId) return res.status(400).json({ error: 'Token/conta não configurados' });
   const [cr, ir] = await Promise.allSettled([
@@ -752,7 +771,7 @@ app.get('/api/fetch-all', async (req, res) => {
 
 // ── API — Claude análise ──────────────────────────────────────────────────────
 
-app.get('/api/analyze', async (req, res) => {
+app.get('/api/analyze', requireAuthOrBearer, async (req, res) => {
   const anthropicKey = getAnthropicKey();
   if (!anthropicKey) return res.status(400).json({ error: 'ANTHROPIC_API_KEY não configurada' });
   let dados = null;

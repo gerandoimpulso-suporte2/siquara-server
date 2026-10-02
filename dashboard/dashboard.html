@@ -846,29 +846,18 @@ async function changePeriodo(dias) {
     b.disabled = true;
   });
 
-  document.getElementById('status-text').textContent = dias === 1 ? 'Buscando últimas 24h...' : `Buscando ${dias} dias...`;
+  document.getElementById('status-text').textContent = dias === 1 ? 'Abrindo últimas 24h...' : `Abrindo ${dias} dias...`;
 
   try {
-    // Sessão do próprio login (cookie) autoriza a chamada — não manda mais
-    // nenhuma chave no header. 'X-Siquara-Dashboard' é só um marcador exigido
-    // pelo servidor pra aceitar a sessão aqui (ver server.js/sessionAuthForExecutar).
-    const resp = await fetch('/api/executar', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', 'X-Siquara-Dashboard': '1' },
-      body: JSON.stringify({ periodo: dias }),
-    });
-    const r = await resp.json().catch(() => ({}));
-
-    if (resp.ok && r.success) {
-      organicoLoaded   = false;
-      criativosLoaded  = false;
-      await loadDados();
-    } else if (resp.status === 401) {
-      document.getElementById('status-text').textContent = 'Sessão expirada — recarregue a página pra entrar de novo.';
-    } else {
-      document.getElementById('status-text').textContent = r.error || 'Erro ao buscar dados';
-    }
+    // 02/10: trocar de período NÃO dispara mais POST /api/executar (isso
+    // chamava o agente com comAnalise:true a cada clique — uma chamada paga
+    // à Anthropic só pra trocar de aba). Agora só lê o cache já gravado pelo
+    // cron/boot/botão Atualizar, igual ao loadDados() do carregamento inicial.
+    // loadDados() já mostra o fetched_at do cache e já trata "sem dados"
+    // (cache ainda não gerado pra esse período) sem quebrar a tela.
+    organicoLoaded   = false;
+    criativosLoaded  = false;
+    await loadDados();
   } catch (e) {
     document.getElementById('status-text').textContent = 'Erro: ' + e.message;
   }
