@@ -37,12 +37,15 @@ if (!fs.existsSync(DADOS_DIR)) {
   fs.mkdirSync(DADOS_DIR, { recursive: true });
 }
 
-// dados.json = cache do último período buscado manualmente (15d, 30d, etc.)
-// dados_24h.json / dados_7d.json = caches fixos, sempre atualizados pelo cron
-// e pelas execuções desses períodos específicos, independentes um do outro.
+// dados_24h.json / dados_7d.json / dados_15d.json = caches fixos por período,
+// sempre atualizados pelo cron (ver CRON_PERIODOS) e por execuções manuais
+// desses mesmos períodos, independentes um do outro.
+// dados.json (DADOS_PATH) = período "livre": 30 dias e qualquer outro valor
+// que não tenha arquivo dedicado.
 function dadosPathFor(daysBack) {
-  if (daysBack === 1) return path.join(DADOS_DIR, 'dados_24h.json');
-  if (daysBack === 7) return path.join(DADOS_DIR, 'dados_7d.json');
+  if (daysBack === 1)  return path.join(DADOS_DIR, 'dados_24h.json');
+  if (daysBack === 7)  return path.join(DADOS_DIR, 'dados_7d.json');
+  if (daysBack === 15) return path.join(DADOS_DIR, 'dados_15d.json');
   return DADOS_PATH;
 }
 
@@ -114,6 +117,38 @@ function requireAuth(req, res, next) {
   if (!user) return res.redirect('/?expired=1');
   req.user = user;
   next();
+}
+
+// Header customizado que só o JS do próprio dashboard.html envia. Protege
+// contra CSRF em /api/executar quando a sessão (cookie) passa a autorizar
+// a chamada, sem depender mais da chave fixa que o client mandava antes:
+// - um <form> cross-site não consegue setar headers HTTP arbitrários;
+// - fetch/XHR cross-origin com header fora da safelist força preflight
+//   (OPTIONS), e como este servidor não habilita CORS pra nenhum outro
+//   domínio, o navegador bloqueia o preflight antes do POST real sair.
+const DASHBOARD_HEADER = 'x-siquara-dashboard';
+
+// Segunda camada (defesa em profundidade): quando o navegador manda
+// Origin/Referer, confere que bate com o próprio host. Fetch same-origin
+// dentro de um iframe que aponte pro próprio domínio (ex. embutido no DMP)
+// também é same-origin aqui — o que importa é a origem do documento que
+// disparou o fetch, não quem está um nível acima na página.
+function sameOriginRequest(req) {
+  const origin = req.headers.origin || req.headers.referer || '';
+  if (!origin) return true; // navegador não mandou nenhum dos dois — não bloqueia só por isso
+  try { return new URL(origin).host === req.headers.host; } catch { return false; }
+}
+
+// Autoriza /api/executar pela sessão já validada do dashboard (mesmo
+// mecanismo do requireAuth: cookie siquara_auth assinado por verifyToken),
+// só quando a chamada vem do próprio front-end (header custom + mesma
+// origem). O Bearer com API_SECRET continua funcionando do mesmo jeito,
+// sem essa exigência extra, pra automação máquina-a-máquina (cron, scripts).
+function sessionAuthForExecutar(req) {
+  if (!req.headers[DASHBOARD_HEADER]) return null;
+  if (!sameOriginRequest(req)) return null;
+  const cookies = parseCookies(req);
+  return verifyToken(cookies.siquara_auth);
 }
 
 // ── Meta API helpers ──────────────────────────────────────────────────────────
@@ -812,8 +847,15 @@ async function executarAgente(daysBack, { comAnalise = true } = {}) {
 }
 
 app.post('/api/executar', async (req, res) => {
-  if ((req.headers.authorization || '') !== `Bearer ${getApiSecret()}`)
-    return res.status(401).json({ error: 'Não autorizado' });
+  // Aceita OU o Bearer com API_SECRET (automação máquina-a-máquina) OU a
+  // sessão do usuário já logado no dashboard (cookie + header anti-CSRF) —
+  // ver sessionAuthForExecutar acima. Antes só o Bearer fixo valia, e o
+  // dashboard.html mandava uma chave hardcoded desatualizada; por isso toda
+  // atualização dava 401 silencioso desde a rotação do API_SECRET em 05/08.
+  const bearerOk = (req.headers.authorization || '') === `Bearer ${getApiSecret()}`;
+  const sessionUser = bearerOk ? null : sessionAuthForExecutar(req);
+  if (!bearerOk && !sessionUser)
+    return res.status(401).json({ error: 'Não autorizado. Faça login novamente.' });
 
   // periodo pode vir do body (dashboard) ou fallback para env/padrão
   const periodoBody = req.body?.periodo ? parseInt(req.body.periodo, 10) : null;
@@ -866,18 +908,53 @@ app.get('/api/proxy-image', async (req, res) => {
   } catch { res.status(502).send('Proxy error'); }
 });
 
-// ── Cron: atualiza o cache de 24h a cada hora ─────────────────────────────────
-cron.schedule('0 * * * *', async () => {
-  console.log('[CRON] Atualizando dados das últimas 24h...');
-  try {
-    const r = await executarAgente(1, { comAnalise: false });
-    console.log('[CRON] 24h:', (r.log || []).join(' | '));
-  } catch (e) {
-    console.error('[CRON] Erro ao atualizar 24h:', e.message);
+// ── Cron: mantém os 4 caches por período sempre frescos ───────────────────────
+// Até 02/10 só o de 24h era coberto aqui; 7/15/30 dependiam de alguém abrir o
+// dashboard e clicar em "Atualizar" (client-side, com a chave Bearer fixa) —
+// por isso ficaram parados 58 dias quando o API_SECRET rotacionou em 05/08
+// (ver state/siquara-server-sem-atualizar-20261002.md). Agora os 4 períodos
+// são regravados direto pelo cron, sem depender de clique de ninguém — o botão
+// Atualizar (opção B, acima) continua existindo, mas é conveniência, não a
+// única via de atualização.
+// Horários escalonados (minuto/intervalo diferentes) de propósito, pra não
+// disparar todas as chamadas pra Meta Ads no mesmo instante.
+const CRON_PERIODOS = [
+  { daysBack: 1,  schedule: '0 * * * *',    label: '24h' },  // a cada hora, no minuto 0
+  { daysBack: 7,  schedule: '20 */2 * * *', label: '7d'  },  // a cada 2h, no minuto 20
+  { daysBack: 15, schedule: '40 */3 * * *', label: '15d' },  // a cada 3h, no minuto 40
+  { daysBack: 30, schedule: '55 */3 * * *', label: '30d' },  // a cada 3h, no minuto 55 (mesmo ciclo do 15d, minuto diferente)
+];
+
+for (const { daysBack, schedule, label } of CRON_PERIODOS) {
+  cron.schedule(schedule, async () => {
+    console.log(`[CRON] Atualizando cache de ${label}...`);
+    try {
+      const r = await executarAgente(daysBack, { comAnalise: false });
+      console.log(`[CRON] ${label}:`, (r.log || []).join(' | '));
+    } catch (e) {
+      console.error(`[CRON] Erro ao atualizar ${label}:`, e.message);
+    }
+  }, { timezone: 'America/Sao_Paulo' });
+}
+
+// Backfill no boot: se algum cache estiver ausente (primeiro boot, volume
+// novo, ou redeploy antes do próximo horário do cron chegar), gera na hora —
+// não espera o relógio do cron pra um painel novo não abrir vazio.
+async function backfillCachesFaltantes() {
+  for (const { daysBack, label } of CRON_PERIODOS) {
+    if (fs.existsSync(dadosPathFor(daysBack))) continue;
+    console.log(`[BOOT] Cache de ${label} ausente — gerando agora...`);
+    try {
+      const r = await executarAgente(daysBack, { comAnalise: false });
+      console.log(`[BOOT] ${label}:`, (r.log || []).join(' | '));
+    } catch (e) {
+      console.error(`[BOOT] Erro ao gerar ${label}:`, e.message);
+    }
   }
-}, { timezone: 'America/Sao_Paulo' });
+}
 
 app.listen(PORT, () => {
   console.log(`Siquara Server porta ${PORT}`);
   console.log(`Token: ${getToken() ? 'OK' : 'FALTANDO'} | Conta: ${getAccountId() || 'FALTANDO'} | Anthropic: ${getAnthropicKey() ? 'OK' : 'FALTANDO'}`);
+  backfillCachesFaltantes();
 });

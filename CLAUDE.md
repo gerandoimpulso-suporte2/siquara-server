@@ -3,10 +3,15 @@
 ## O que este projeto faz
 
 Servidor Node.js hospedado no Railway que:
-1. Roda o agente Meta ADS todo dia as 8h (node-cron)
+1. Roda o agente Meta ADS via node-cron, um horário por período — 24h a cada
+   hora, 7d a cada 2h, 15d e 30d a cada 3h (minutos escalonados; ver
+   `CRON_PERIODOS` em `server.js`). Backfill automático no boot se algum
+   cache estiver ausente.
 2. Busca dados da Meta Marketing API (campanhas, anuncios, criativos, Instagram)
 3. Analisa com Claude (Anthropic) e gera insights de performance e criativos
-4. Salva dados em /data/dados.json (Railway Volume)
+4. Salva os caches em /data (Railway Volume): `dados_24h.json`, `dados_7d.json`,
+   `dados_15d.json`, e `dados.json` (período "livre" = 30 dias ou qualquer
+   outro valor sem arquivo dedicado)
 5. Serve uma API REST em /api/dados para o dashboard consultar
 
 Projeto independente do palmital-server, criado como base para o cliente
@@ -42,7 +47,10 @@ npm run dev
 - GET  /api/criativos   — performance de criativos (com imagens reais)
 - GET  /api/organico    — posts organicos do Instagram
 - GET  /api/analyze     — analise completa via Claude
-- POST /api/executar    — dispara o agente manualmente (requer Authorization header)
+- POST /api/executar    — dispara o agente manualmente (Bearer API_SECRET para
+  automação, OU sessão do dashboard já logado + header `X-Siquara-Dashboard: 1`
+  — ver `sessionAuthForExecutar` em `server.js`; desde 02/10 o dashboard.html
+  não manda mais nenhuma chave fixa no header)
 - POST /api/setup       — configura credenciais e roda o agente numa unica chamada
 - POST /api/token       — atualiza credenciais em runtime (requer Authorization header)
 
@@ -92,8 +100,11 @@ siquara-server/
   .env.example
   .gitignore
   CLAUDE.md
-  data/              — criado automaticamente pelo Railway Volume
-    dados.json
+  data/              — criado automaticamente pelo Railway Volume (/data em produção)
+    dados.json       — cache "livre" (30 dias ou período sem arquivo dedicado)
+    dados_24h.json
+    dados_7d.json
+    dados_15d.json
 ```
 
 ## Quando o token Meta expirar

@@ -849,16 +849,23 @@ async function changePeriodo(dias) {
   document.getElementById('status-text').textContent = dias === 1 ? 'Buscando últimas 24h...' : `Buscando ${dias} dias...`;
 
   try {
-    const r = await fetch('/api/executar', {
+    // Sessão do próprio login (cookie) autoriza a chamada — não manda mais
+    // nenhuma chave no header. 'X-Siquara-Dashboard' é só um marcador exigido
+    // pelo servidor pra aceitar a sessão aqui (ver server.js/sessionAuthForExecutar).
+    const resp = await fetch('/api/executar', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer siquara2025' },
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-Siquara-Dashboard': '1' },
       body: JSON.stringify({ periodo: dias }),
-    }).then(r => r.json());
+    });
+    const r = await resp.json().catch(() => ({}));
 
-    if (r.success) {
+    if (resp.ok && r.success) {
       organicoLoaded   = false;
       criativosLoaded  = false;
       await loadDados();
+    } else if (resp.status === 401) {
+      document.getElementById('status-text').textContent = 'Sessão expirada — recarregue a página pra entrar de novo.';
     } else {
       document.getElementById('status-text').textContent = r.error || 'Erro ao buscar dados';
     }
@@ -878,13 +885,23 @@ async function refreshDados() {
   btn.disabled = true;
   document.getElementById('status-text').textContent = `Atualizando ${PERIODO} dias...`;
   try {
-    const r = await fetch('/api/executar', {
+    const resp = await fetch('/api/executar', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer siquara2025' },
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-Siquara-Dashboard': '1' },
       body: JSON.stringify({ periodo: PERIODO }),
-    }).then(r => r.json());
-    if (r.success) await loadDados();
-  } catch {}
+    });
+    const r = await resp.json().catch(() => ({}));
+    if (resp.ok && r.success) {
+      await loadDados();
+    } else if (resp.status === 401) {
+      document.getElementById('status-text').textContent = 'Sessão expirada — recarregue a página pra entrar de novo.';
+    } else {
+      document.getElementById('status-text').textContent = r.error || 'Erro ao atualizar dados';
+    }
+  } catch (e) {
+    document.getElementById('status-text').textContent = 'Erro: ' + e.message;
+  }
   btn.classList.remove('loading');
   btn.disabled = false;
 }
